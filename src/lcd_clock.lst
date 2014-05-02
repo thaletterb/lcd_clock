@@ -1,0 +1,531 @@
+   1               		.file	"lcd_clock.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               	.global	wait_until_key_pressed
+  11               	wait_until_key_pressed:
+  12               	.LFB1:
+  13               		.file 1 "lcd_clock.c"
+   1:lcd_clock.c   **** /*************************************************************************
+   2:lcd_clock.c   **** Title:    testing output to a HD44780 based LCD display.
+   3:lcd_clock.c   **** Author:   Peter Fleury  <pfleury@gmx.ch>  http://jump.to/fleury
+   4:lcd_clock.c   **** File:     $Id: test_lcd.c,v 1.6 2004/12/10 13:53:59 peter Exp $
+   5:lcd_clock.c   **** Software: AVR-GCC 3.3
+   6:lcd_clock.c   **** Hardware: HD44780 compatible LCD text display
+   7:lcd_clock.c   ****           ATS90S8515/ATmega if memory-mapped LCD interface is used
+   8:lcd_clock.c   ****           any AVR with 7 free I/O pins if 4-bit IO port mode is used
+   9:lcd_clock.c   **** **************************************************************************/
+  10:lcd_clock.c   **** #include <stdlib.h>
+  11:lcd_clock.c   **** #include <avr/io.h>
+  12:lcd_clock.c   **** #include <avr/pgmspace.h>
+  13:lcd_clock.c   **** #include "lcd.h"
+  14:lcd_clock.c   **** #include <avr/interrupt.h>
+  15:lcd_clock.c   **** #include <stdbool.h>
+  16:lcd_clock.c   **** /*
+  17:lcd_clock.c   **** ** constant definitions
+  18:lcd_clock.c   **** */
+  19:lcd_clock.c   **** static const PROGMEM unsigned char copyRightChar[] =
+  20:lcd_clock.c   **** {
+  21:lcd_clock.c   **** 	0x07, 0x08, 0x13, 0x14, 0x14, 0x13, 0x08, 0x07,
+  22:lcd_clock.c   **** 	0x00, 0x10, 0x08, 0x08, 0x08, 0x08, 0x10, 0x00
+  23:lcd_clock.c   **** };
+  24:lcd_clock.c   **** /*Global Variables Declarations*/
+  25:lcd_clock.c   **** unsigned char hours = 12;
+  26:lcd_clock.c   **** unsigned char minutes = 0;
+  27:lcd_clock.c   **** unsigned char seconds = 0;
+  28:lcd_clock.c   **** char time[] = "00:00:00";
+  29:lcd_clock.c   ****  
+  30:lcd_clock.c   **** bool isMorning = false;
+  31:lcd_clock.c   **** 
+  32:lcd_clock.c   **** /*
+  33:lcd_clock.c   **** ** function prototypes
+  34:lcd_clock.c   **** */ 
+  35:lcd_clock.c   **** void wait_until_key_pressed(void);
+  36:lcd_clock.c   **** void LCD_update_time(void);
+  37:lcd_clock.c   **** 
+  38:lcd_clock.c   **** void wait_until_key_pressed(void)
+  39:lcd_clock.c   **** {
+  14               		.loc 1 39 0
+  15               	/* prologue: function */
+  16               	/* frame size = 0 */
+  17               	/* stack size = 0 */
+  18               	.L__stack_usage = 0
+  19               	.L2:
+  40:lcd_clock.c   ****     unsigned char temp1, temp2;
+  41:lcd_clock.c   ****     unsigned int i;
+  42:lcd_clock.c   ****     
+  43:lcd_clock.c   ****     do {
+  44:lcd_clock.c   ****         temp1 = PIND;                  // read input
+  20               		.loc 1 44 0
+  21 0000 89B1      		in r24,0x9
+  22               	.LVL0:
+  45:lcd_clock.c   ****         for(i=0;i<65535;i++);
+  46:lcd_clock.c   ****         temp2 = PIND;                  // read input
+  23               		.loc 1 46 0
+  24 0002 99B1      		in r25,0x9
+  25               	.LVL1:
+  47:lcd_clock.c   ****         temp1 = (temp1 & temp2);       // debounce input
+  26               		.loc 1 47 0
+  27 0004 8923      		and r24,r25
+  28               	.LVL2:
+  48:lcd_clock.c   ****     } while ( temp1 & _BV(PIND2) );
+  29               		.loc 1 48 0
+  30 0006 82FD      		sbrc r24,2
+  31 0008 00C0      		rjmp .L2
+  32               	.L6:
+  49:lcd_clock.c   ****     
+  50:lcd_clock.c   ****     loop_until_bit_is_set(PIND,PIND2);            /* wait until key is released */
+  33               		.loc 1 50 0
+  34 000a 4A9B      		sbis 0x9,2
+  35 000c 00C0      		rjmp .L6
+  36               	/* epilogue start */
+  51:lcd_clock.c   **** }
+  37               		.loc 1 51 0
+  38 000e 0895      		ret
+  39               	.LFE1:
+  41               		.section	.rodata.str1.1,"aMS",@progbits,1
+  42               	.LC0:
+  43 0000 3A00      		.string	":"
+  44               		.text
+  45               	.global	LCD_update_time
+  47               	LCD_update_time:
+  48               	.LFB2:
+  52:lcd_clock.c   **** 
+  53:lcd_clock.c   **** void LCD_update_time()
+  54:lcd_clock.c   **** {
+  49               		.loc 1 54 0
+  50 0010 CF93      		push r28
+  51               	.LCFI0:
+  52 0012 DF93      		push r29
+  53               	.LCFI1:
+  54               	/* prologue: function */
+  55               	/* frame size = 0 */
+  56               	/* stack size = 2 */
+  57               	.L__stack_usage = 2
+  55:lcd_clock.c   ****     unsigned char temp;
+  56:lcd_clock.c   **** 
+  57:lcd_clock.c   ****     lcd_clrscr();
+  58               		.loc 1 57 0
+  59 0014 0E94 0000 		call lcd_clrscr
+  60               	.LVL3:
+  58:lcd_clock.c   ****     lcd_gotoxy(0,1);                    // Go to first character of second line
+  61               		.loc 1 58 0
+  62 0018 61E0      		ldi r22,lo8(1)
+  63 001a 80E0      		ldi r24,0
+  64 001c 0E94 0000 		call lcd_gotoxy
+  65               	.LVL4:
+  59:lcd_clock.c   ****     itoa( hours/10 , temp, 10);         // Display the hours digits
+  66               		.loc 1 59 0
+  67 0020 8091 0000 		lds r24,hours
+  68 0024 DAE0      		ldi r29,lo8(10)
+  69 0026 6D2F      		mov r22,r29
+  70 0028 0E94 0000 		call __udivmodqi4
+  71 002c 4AE0      		ldi r20,lo8(10)
+  72 002e 50E0      		ldi r21,0
+  73 0030 C0E0      		ldi r28,0
+  74 0032 6C2F      		mov r22,r28
+  75 0034 70E0      		ldi r23,0
+  76 0036 90E0      		ldi r25,0
+  77 0038 0E94 0000 		call itoa
+  78               	.LVL5:
+  60:lcd_clock.c   ****     lcd_puts(temp);                     // Nifty way to zero pad single digit numbers
+  79               		.loc 1 60 0
+  80 003c 8C2F      		mov r24,r28
+  81 003e 90E0      		ldi r25,0
+  82 0040 0E94 0000 		call lcd_puts
+  83               	.LVL6:
+  61:lcd_clock.c   ****     itoa( hours%10 , temp, 10);
+  84               		.loc 1 61 0
+  85 0044 8091 0000 		lds r24,hours
+  86 0048 6D2F      		mov r22,r29
+  87 004a 0E94 0000 		call __udivmodqi4
+  88 004e 892F      		mov r24,r25
+  89 0050 4AE0      		ldi r20,lo8(10)
+  90 0052 50E0      		ldi r21,0
+  91 0054 6C2F      		mov r22,r28
+  92 0056 70E0      		ldi r23,0
+  93 0058 90E0      		ldi r25,0
+  94 005a 0E94 0000 		call itoa
+  95               	.LVL7:
+  62:lcd_clock.c   ****     lcd_puts(temp);
+  96               		.loc 1 62 0
+  97 005e 8C2F      		mov r24,r28
+  98 0060 90E0      		ldi r25,0
+  99 0062 0E94 0000 		call lcd_puts
+ 100               	.LVL8:
+  63:lcd_clock.c   ****     lcd_puts(":");
+ 101               		.loc 1 63 0
+ 102 0066 80E0      		ldi r24,lo8(.LC0)
+ 103 0068 90E0      		ldi r25,hi8(.LC0)
+ 104 006a 0E94 0000 		call lcd_puts
+ 105               	.LVL9:
+  64:lcd_clock.c   **** 
+  65:lcd_clock.c   ****     itoa( minutes/10 , temp, 10);       // Display the minutes digits
+ 106               		.loc 1 65 0
+ 107 006e 8091 0000 		lds r24,minutes
+ 108 0072 6D2F      		mov r22,r29
+ 109 0074 0E94 0000 		call __udivmodqi4
+ 110 0078 4AE0      		ldi r20,lo8(10)
+ 111 007a 50E0      		ldi r21,0
+ 112 007c 6C2F      		mov r22,r28
+ 113 007e 70E0      		ldi r23,0
+ 114 0080 90E0      		ldi r25,0
+ 115 0082 0E94 0000 		call itoa
+ 116               	.LVL10:
+  66:lcd_clock.c   ****     lcd_puts(temp);
+ 117               		.loc 1 66 0
+ 118 0086 8C2F      		mov r24,r28
+ 119 0088 90E0      		ldi r25,0
+ 120 008a 0E94 0000 		call lcd_puts
+ 121               	.LVL11:
+  67:lcd_clock.c   ****     itoa( minutes%10 , temp, 10);
+ 122               		.loc 1 67 0
+ 123 008e 8091 0000 		lds r24,minutes
+ 124 0092 6D2F      		mov r22,r29
+ 125 0094 0E94 0000 		call __udivmodqi4
+ 126 0098 892F      		mov r24,r25
+ 127 009a 4AE0      		ldi r20,lo8(10)
+ 128 009c 50E0      		ldi r21,0
+ 129 009e 6C2F      		mov r22,r28
+ 130 00a0 70E0      		ldi r23,0
+ 131 00a2 90E0      		ldi r25,0
+ 132 00a4 0E94 0000 		call itoa
+ 133               	.LVL12:
+  68:lcd_clock.c   ****     lcd_puts(temp);
+ 134               		.loc 1 68 0
+ 135 00a8 8C2F      		mov r24,r28
+ 136 00aa 90E0      		ldi r25,0
+ 137 00ac 0E94 0000 		call lcd_puts
+ 138               	.LVL13:
+  69:lcd_clock.c   ****     lcd_puts(":");
+ 139               		.loc 1 69 0
+ 140 00b0 80E0      		ldi r24,lo8(.LC0)
+ 141 00b2 90E0      		ldi r25,hi8(.LC0)
+ 142 00b4 0E94 0000 		call lcd_puts
+ 143               	.LVL14:
+  70:lcd_clock.c   **** 
+  71:lcd_clock.c   ****     itoa( seconds/10 , temp, 10);       // Display the seconds digits
+ 144               		.loc 1 71 0
+ 145 00b8 8091 0000 		lds r24,seconds
+ 146 00bc 6D2F      		mov r22,r29
+ 147 00be 0E94 0000 		call __udivmodqi4
+ 148 00c2 4AE0      		ldi r20,lo8(10)
+ 149 00c4 50E0      		ldi r21,0
+ 150 00c6 6C2F      		mov r22,r28
+ 151 00c8 70E0      		ldi r23,0
+ 152 00ca 90E0      		ldi r25,0
+ 153 00cc 0E94 0000 		call itoa
+ 154               	.LVL15:
+  72:lcd_clock.c   ****     lcd_puts(temp);
+ 155               		.loc 1 72 0
+ 156 00d0 8C2F      		mov r24,r28
+ 157 00d2 90E0      		ldi r25,0
+ 158 00d4 0E94 0000 		call lcd_puts
+ 159               	.LVL16:
+  73:lcd_clock.c   ****     itoa( seconds%10 , temp, 10);
+ 160               		.loc 1 73 0
+ 161 00d8 8091 0000 		lds r24,seconds
+ 162 00dc 6D2F      		mov r22,r29
+ 163 00de 0E94 0000 		call __udivmodqi4
+ 164 00e2 892F      		mov r24,r25
+ 165 00e4 4AE0      		ldi r20,lo8(10)
+ 166 00e6 50E0      		ldi r21,0
+ 167 00e8 6C2F      		mov r22,r28
+ 168 00ea 70E0      		ldi r23,0
+ 169 00ec 90E0      		ldi r25,0
+ 170 00ee 0E94 0000 		call itoa
+ 171               	.LVL17:
+  74:lcd_clock.c   ****     lcd_puts(temp);
+ 172               		.loc 1 74 0
+ 173 00f2 8C2F      		mov r24,r28
+ 174 00f4 90E0      		ldi r25,0
+ 175               	/* epilogue start */
+  75:lcd_clock.c   **** }
+ 176               		.loc 1 75 0
+ 177 00f6 DF91      		pop r29
+ 178 00f8 CF91      		pop r28
+  74:lcd_clock.c   ****     lcd_puts(temp);
+ 179               		.loc 1 74 0
+ 180 00fa 0C94 0000 		jmp lcd_puts
+ 181               	.LVL18:
+ 182               	.LFE2:
+ 184               		.section	.rodata.str1.1
+ 185               	.LC1:
+ 186 0002 4865 6C6C 		.string	"Hello World\n"
+ 186      6F20 576F 
+ 186      726C 640A 
+ 186      00
+ 187               		.section	.text.startup,"ax",@progbits
+ 188               	.global	main
+ 190               	main:
+ 191               	.LFB3:
+  76:lcd_clock.c   **** 
+  77:lcd_clock.c   **** int main(void)
+  78:lcd_clock.c   **** {
+ 192               		.loc 1 78 0
+ 193               	/* prologue: function */
+ 194               	/* frame size = 0 */
+ 195               	/* stack size = 0 */
+ 196               	.L__stack_usage = 0
+  79:lcd_clock.c   ****     
+  80:lcd_clock.c   ****     //Setup the clock
+  81:lcd_clock.c   ****     cli();                              //Disable global interrupts
+ 197               		.loc 1 81 0
+ 198               	/* #APP */
+ 199               	 ;  81 "lcd_clock.c" 1
+ 200 0000 F894      		cli
+ 201               	 ;  0 "" 2
+  82:lcd_clock.c   ****     TCCR1B |= 1<<CS11 | 1<<CS10;        //Divide by 64
+ 202               		.loc 1 82 0
+ 203               	/* #NOAPP */
+ 204 0002 8091 8100 		lds r24,129
+ 205 0006 8360      		ori r24,lo8(3)
+ 206 0008 8093 8100 		sts 129,r24
+  83:lcd_clock.c   ****     OCR1A = 15624;                      //Count 15624 cycles for 1 second interrupt
+ 207               		.loc 1 83 0
+ 208 000c 88E0      		ldi r24,lo8(8)
+ 209 000e 9DE3      		ldi r25,lo8(61)
+ 210 0010 9093 8900 		sts 136+1,r25
+ 211 0014 8093 8800 		sts 136,r24
+  84:lcd_clock.c   ****     TCCR1B |= 1<<WGM12;                 //Put Timer/Counter1 in CTC mode
+ 212               		.loc 1 84 0
+ 213 0018 8091 8100 		lds r24,129
+ 214 001c 8860      		ori r24,lo8(8)
+ 215 001e 8093 8100 		sts 129,r24
+  85:lcd_clock.c   ****     TIMSK1 |= 1<<OCIE1A;                //enable timer compare interrupt
+ 216               		.loc 1 85 0
+ 217 0022 8091 6F00 		lds r24,111
+ 218 0026 8260      		ori r24,lo8(2)
+ 219 0028 8093 6F00 		sts 111,r24
+  86:lcd_clock.c   ****     sei();                              //Enable global interrupts
+ 220               		.loc 1 86 0
+ 221               	/* #APP */
+ 222               	 ;  86 "lcd_clock.c" 1
+ 223 002c 7894      		sei
+ 224               	 ;  0 "" 2
+  87:lcd_clock.c   **** 
+  88:lcd_clock.c   ****     //Setup the I/O for the LED
+  89:lcd_clock.c   **** 
+  90:lcd_clock.c   ****     DDRD |= (1<<7);                     //Set PortD Pin7 as an output
+ 225               		.loc 1 90 0
+ 226               	/* #NOAPP */
+ 227 002e 579A      		sbi 0xa,7
+  91:lcd_clock.c   ****     PORTD |= (1<<7);                    //Set PortD Pin7 high to turn on LED
+ 228               		.loc 1 91 0
+ 229 0030 5F9A      		sbi 0xb,7
+  92:lcd_clock.c   **** 
+  93:lcd_clock.c   ****     DDRD &=~ (1 << PD2);                /* Pin PD2 input              */
+ 230               		.loc 1 93 0
+ 231 0032 5298      		cbi 0xa,2
+  94:lcd_clock.c   ****     PORTD |= (1 << PD2);                /* Pin PD2 pull-up enabled    */
+ 232               		.loc 1 94 0
+ 233 0034 5A9A      		sbi 0xb,2
+  95:lcd_clock.c   **** 
+  96:lcd_clock.c   ****     /* initialize display, cursor off */
+  97:lcd_clock.c   ****     lcd_init(LCD_DISP_ON);
+ 234               		.loc 1 97 0
+ 235 0036 8CE0      		ldi r24,lo8(12)
+ 236 0038 0E94 0000 		call lcd_init
+ 237               	.LVL19:
+  98:lcd_clock.c   ****     lcd_clrscr();
+ 238               		.loc 1 98 0
+ 239 003c 0E94 0000 		call lcd_clrscr
+ 240               	.LVL20:
+  99:lcd_clock.c   ****     lcd_puts("Hello World\n");
+ 241               		.loc 1 99 0
+ 242 0040 80E0      		ldi r24,lo8(.LC1)
+ 243 0042 90E0      		ldi r25,hi8(.LC1)
+ 244 0044 0E94 0000 		call lcd_puts
+ 245               	.LVL21:
+ 100:lcd_clock.c   ****     lcd_puts(time);
+ 246               		.loc 1 100 0
+ 247 0048 80E0      		ldi r24,lo8(time)
+ 248 004a 90E0      		ldi r25,hi8(time)
+ 249 004c 0E94 0000 		call lcd_puts
+ 250               	.LVL22:
+ 251               	.L12:
+ 252 0050 00C0      		rjmp .L12
+ 253               	.LFE3:
+ 255               		.text
+ 256               	.global	__vector_11
+ 258               	__vector_11:
+ 259               	.LFB4:
+ 101:lcd_clock.c   ****     for (;;) {                           /* loop forever waiting for interrupts*/
+ 102:lcd_clock.c   ****     }
+ 103:lcd_clock.c   **** }
+ 104:lcd_clock.c   **** 
+ 105:lcd_clock.c   **** ISR(TIMER1_COMPA_vect)      //Interrupt Service Routine
+ 106:lcd_clock.c   **** {
+ 260               		.loc 1 106 0
+ 261 00fe 1F92      		push r1
+ 262               	.LCFI2:
+ 263 0100 0F92      		push r0
+ 264               	.LCFI3:
+ 265 0102 0FB6      		in r0,__SREG__
+ 266 0104 0F92      		push r0
+ 267 0106 1124      		clr __zero_reg__
+ 268 0108 2F93      		push r18
+ 269               	.LCFI4:
+ 270 010a 3F93      		push r19
+ 271               	.LCFI5:
+ 272 010c 4F93      		push r20
+ 273               	.LCFI6:
+ 274 010e 5F93      		push r21
+ 275               	.LCFI7:
+ 276 0110 6F93      		push r22
+ 277               	.LCFI8:
+ 278 0112 7F93      		push r23
+ 279               	.LCFI9:
+ 280 0114 8F93      		push r24
+ 281               	.LCFI10:
+ 282 0116 9F93      		push r25
+ 283               	.LCFI11:
+ 284 0118 AF93      		push r26
+ 285               	.LCFI12:
+ 286 011a BF93      		push r27
+ 287               	.LCFI13:
+ 288 011c EF93      		push r30
+ 289               	.LCFI14:
+ 290 011e FF93      		push r31
+ 291               	.LCFI15:
+ 292               	/* prologue: Signal */
+ 293               	/* frame size = 0 */
+ 294               	/* stack size = 15 */
+ 295               	.L__stack_usage = 15
+ 107:lcd_clock.c   ****         PORTD ^= (1<<7);                //Use xor to toggle the status LED
+ 296               		.loc 1 107 0
+ 297 0120 8BB1      		in r24,0xb
+ 298 0122 8058      		subi r24,lo8(-(-128))
+ 299 0124 8BB9      		out 0xb,r24
+ 108:lcd_clock.c   ****         seconds++;
+ 300               		.loc 1 108 0
+ 301 0126 8091 0000 		lds r24,seconds
+ 302 012a 8F5F      		subi r24,lo8(-(1))
+ 109:lcd_clock.c   ****         if(seconds==60)
+ 303               		.loc 1 109 0
+ 304 012c 8C33      		cpi r24,lo8(60)
+ 305 012e 01F0      		breq .L14
+ 108:lcd_clock.c   ****         seconds++;
+ 306               		.loc 1 108 0
+ 307 0130 8093 0000 		sts seconds,r24
+ 308 0134 00C0      		rjmp .L15
+ 309               	.L14:
+ 110:lcd_clock.c   ****         {
+ 111:lcd_clock.c   ****             seconds = 0;
+ 310               		.loc 1 111 0
+ 311 0136 1092 0000 		sts seconds,__zero_reg__
+ 112:lcd_clock.c   ****             minutes++;
+ 312               		.loc 1 112 0
+ 313 013a 8091 0000 		lds r24,minutes
+ 314 013e 8F5F      		subi r24,lo8(-(1))
+ 315 0140 8093 0000 		sts minutes,r24
+ 316               	.L15:
+ 113:lcd_clock.c   ****         }
+ 114:lcd_clock.c   ****         if(minutes==60)
+ 317               		.loc 1 114 0
+ 318 0144 8091 0000 		lds r24,minutes
+ 319 0148 8C33      		cpi r24,lo8(60)
+ 320 014a 01F4      		brne .L16
+ 115:lcd_clock.c   ****         {
+ 116:lcd_clock.c   ****             minutes = 0;
+ 321               		.loc 1 116 0
+ 322 014c 1092 0000 		sts minutes,__zero_reg__
+ 117:lcd_clock.c   ****             hours++;
+ 323               		.loc 1 117 0
+ 324 0150 8091 0000 		lds r24,hours
+ 325 0154 8F5F      		subi r24,lo8(-(1))
+ 326 0156 8093 0000 		sts hours,r24
+ 327               	.L16:
+ 118:lcd_clock.c   ****         }
+ 119:lcd_clock.c   ****         if(hours==13)
+ 328               		.loc 1 119 0
+ 329 015a 8091 0000 		lds r24,hours
+ 330 015e 8D30      		cpi r24,lo8(13)
+ 331 0160 01F4      		brne .L17
+ 120:lcd_clock.c   ****         {
+ 121:lcd_clock.c   ****             hours = 1;
+ 332               		.loc 1 121 0
+ 333 0162 81E0      		ldi r24,lo8(1)
+ 334 0164 8093 0000 		sts hours,r24
+ 335               	.L17:
+ 122:lcd_clock.c   ****         }
+ 123:lcd_clock.c   ****         LCD_update_time();
+ 336               		.loc 1 123 0
+ 337 0168 0E94 0000 		call LCD_update_time
+ 338               	.LVL23:
+ 339               	/* epilogue start */
+ 124:lcd_clock.c   **** }
+ 340               		.loc 1 124 0
+ 341 016c FF91      		pop r31
+ 342 016e EF91      		pop r30
+ 343 0170 BF91      		pop r27
+ 344 0172 AF91      		pop r26
+ 345 0174 9F91      		pop r25
+ 346 0176 8F91      		pop r24
+ 347 0178 7F91      		pop r23
+ 348 017a 6F91      		pop r22
+ 349 017c 5F91      		pop r21
+ 350 017e 4F91      		pop r20
+ 351 0180 3F91      		pop r19
+ 352 0182 2F91      		pop r18
+ 353 0184 0F90      		pop r0
+ 354 0186 0FBE      		out __SREG__,r0
+ 355 0188 0F90      		pop r0
+ 356 018a 1F90      		pop r1
+ 357 018c 1895      		reti
+ 358               	.LFE4:
+ 360               	.global	isMorning
+ 361               		.section .bss
+ 364               	isMorning:
+ 365 0000 00        		.zero	1
+ 366               	.global	time
+ 367               		.data
+ 370               	time:
+ 371 0000 3030 3A30 		.string	"00:00:00"
+ 371      303A 3030 
+ 371      00
+ 372               	.global	seconds
+ 373               		.section .bss
+ 376               	seconds:
+ 377 0001 00        		.zero	1
+ 378               	.global	minutes
+ 381               	minutes:
+ 382 0002 00        		.zero	1
+ 383               	.global	hours
+ 384               		.data
+ 387               	hours:
+ 388 0009 0C        		.byte	12
+ 535               	.Letext0:
+ 536               		.file 2 "/usr/lib/gcc/avr/4.7.2/../../../avr/include/stdint.h"
+ 537               		.file 3 "lcd.h"
+ 538               		.file 4 "/usr/lib/gcc/avr/4.7.2/../../../avr/include/stdlib.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 lcd_clock.c
+     /tmp/ccrI1wDK.s:2      *ABS*:0000003e __SP_H__
+     /tmp/ccrI1wDK.s:3      *ABS*:0000003d __SP_L__
+     /tmp/ccrI1wDK.s:4      *ABS*:0000003f __SREG__
+     /tmp/ccrI1wDK.s:5      *ABS*:00000000 __tmp_reg__
+     /tmp/ccrI1wDK.s:6      *ABS*:00000001 __zero_reg__
+     /tmp/ccrI1wDK.s:11     .text:00000000 wait_until_key_pressed
+     /tmp/ccrI1wDK.s:47     .text:00000010 LCD_update_time
+     /tmp/ccrI1wDK.s:387    .data:00000009 hours
+     /tmp/ccrI1wDK.s:381    .bss:00000002 minutes
+     /tmp/ccrI1wDK.s:376    .bss:00000001 seconds
+     /tmp/ccrI1wDK.s:190    .text.startup:00000000 main
+     /tmp/ccrI1wDK.s:370    .data:00000000 time
+     /tmp/ccrI1wDK.s:258    .text:000000fe __vector_11
+     /tmp/ccrI1wDK.s:364    .bss:00000000 isMorning
+
+UNDEFINED SYMBOLS
+lcd_clrscr
+lcd_gotoxy
+__udivmodqi4
+itoa
+lcd_puts
+lcd_init
+__do_copy_data
+__do_clear_bss
